@@ -1,0 +1,18 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "KG DevOps interview CF stack",
+	
+	"Resources": {
+	
+	"KGQueue" : {
+      "Type" : "AWS::SQS::Queue",
+      "Properties" : {
+         "QueueName" : "IfeanyiOnyia"
+      }
+	}
+	
+	
+	
+	
+}
+}

@@ -1,0 +1,346 @@
+
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "KG DevOps interview CF stack",
+
+
+ "Parameters": {
+        "SSHKeyName": {
+            "Description": "Name of the ec2 key you need one to use this template",
+            "Type": "AWS::EC2::KeyPair::KeyName",
+            "Default": "choose-key"
+        },
+		
+        "VPC": {
+            "Description": "Name of the ec2 key you need one to use this template",
+            "Type": "AWS::EC2::VPC::Id",
+            "Default": "choose-Id"
+        },
+		
+        "Subnets": {
+            "Description": "Name of the ec2 key you need one to use this template",
+            "Type": "AWS::EC2::Subnet::Id",
+            "Default": "choose-Id"
+        },
+        "Subnets1": {
+            "Description": "Name of the ec2 key you need one to use this template",
+            "Type": "AWS::EC2::Subnet::Id",
+            "Default": "choose-Id"
+        }
+    },
+	"Mappings": {
+        "RegionToAmazonAMI": {
+            "us-east-1": {
+                "HVM64": "ami-01cc34ab2709337aa"
+            },
+            "us-east-2": {
+                "HVM64": "ami-0f19d220602031aed"
+            },
+            "us-west-1": {
+                "HVM64": "ami-0e0bf4b3a0c0e0adc"
+            },
+            "us-west-2": {
+                "HVM64": "ami-0e5b6b6a9f3db6db8"
+            }
+        }
+		},
+		
+		"Resources": {
+		
+		
+		"EC2SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "SSH and Port 80",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 22,
+                        "ToPort": 22,
+                        "CidrIp": "0.0.0.0/0"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ELBSecurityGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ELBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Port 80",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0"
+                    }
+                ]
+            }
+        },
+        "InterviewEC2Instance": {
+            "Type": "AWS::EC2::Instance",
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionToAmazonAMI",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "HVM64"
+                    ]
+                },
+                "InstanceInitiatedShutdownBehavior": "stop",
+                "InstanceType": "t2.nano",
+                "KeyName": {
+                    "Ref": "SSHKeyName"
+                },
+                "Monitoring": "true",
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "true",
+                        "DeviceIndex": "0",
+                        "GroupSet": [
+                            {
+                                "Ref": "EC2SecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "Subnets"
+                        }
+                    }
+                ],
+                "Tenancy": "default",
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Sub": "#!/bin/bash -xe\ncd /tmp\nyum update -y\nyum install -y httpd24\necho \"Healthy\" > /var/www/html/index.html\nservice httpd start\n/opt/aws/bin/cfn-signal \\\n  -e $? \\\n  --stack ${AWS::StackName} \\\n  --resource AmazonLinuxInstance \\\n  --region ${AWS::Region}\n"
+                    }
+                },
+                "IamInstanceProfile" : {
+                    "Ref" : "ListSQSQueues"
+                  },
+                "Tags" :[{
+
+                    "Key" : "Name",
+
+                    "Value" : "Ifeanyi Onyia"
+
+                }]
+
+            }
+        },
+
+        "ListSQSQueues" : {
+            "Type" : "AWS::IAM::InstanceProfile",
+            "Properties" : {
+              "Path" : "/",
+              "Roles" : [
+                {
+                  "Ref" : "ListQueueRole"
+                }
+              ]
+            }
+          },
+          "ListQueuePolicy" : {
+            "Type" : "AWS::IAM::Policy",
+            "Properties" : {
+              "PolicyName" : "ListQueuePolicy",
+              "PolicyDocument" : {
+                "Statement" : [
+                  {
+                    "Effect" : "Allow",
+                    "Action" : [
+                      "sqs:ListQueues",
+                      "sqs:GetQueueUrl",
+                "sqs:ListQueueTag",
+                "sqs:GetQueueAttributes",
+                "sqs:ReceiveMessage"
+                    ],
+                    "Resource" : "*"
+                  }
+                ]
+              },
+              "Roles" : [
+                {
+                  "Ref" : "ListQueueRole"
+                }
+              ]
+            }
+          },
+          "ListQueueRole" : {
+            "Type" : "AWS::IAM::Role",
+            "Properties" : {
+              "AssumeRolePolicyDocument": {
+                "Version" : "2012-10-17",
+                "Statement" : [
+                  {
+                    "Effect" : "Allow",
+                    "Principal" : {
+                      "Service" : ["ec2.amazonaws.com"]
+                    },
+                    "Action" : [
+                      "sts:AssumeRole"
+                    ]
+                  }
+                ]
+              },
+              "Path" : "/"
+            }
+          },
+        
+
+
+        "EC2TargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 15,
+                "HealthyThresholdCount": 5,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Name": "EC2TargetGroup",
+                "Port": 80,
+                "Protocol": "HTTP",
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": "20"
+                    }
+                ],
+                "Targets": [
+                    {
+                        "Id": {
+                            "Ref": "InterviewEC2Instance"
+                        },
+                        "Port": 80
+                    }
+                ],
+                "UnhealthyThresholdCount": 3,
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": "EC2TargetGroup"
+                    },
+                    {
+                        "Key": "Port",
+                        "Value": 80
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "EC2TargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "ApplicationLoadBalancer": {
+          
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Scheme": "internet-facing",
+                "Subnets": [
+                    {
+                        "Ref": "Subnets"
+                    },
+                    {
+                        "Ref": "Subnets1"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ELBSecurityGroup"
+                    }
+                ],
+                "Tags" :[{
+
+                    "Key" : "Name",
+
+                    "Value" : "IfeanyiOnyia-ALB"
+
+                }]
+
+            }
+        }
+    },
+    "Outputs": {
+        "VPC": {
+            "Description": "Virtual Private Cloud",
+            "Value": {
+                "Ref": "VPC"
+            }
+        },
+        "ALBHostName": {
+            "Description": "Application Load Balancer Hostname",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            }
+        },
+        "EC2Instance": {
+            "Description": "EC2 Instance",
+            "Value": {
+                "Ref": "InterviewEC2Instance"
+            }
+        },
+
+        "EC2TargetGroup": {
+            "Description": "EC2 Target Group",
+            "Value": {
+                "Ref": "EC2TargetGroup"
+            }
+        },
+        
+
+        "ApplicationLoadBalancer": {
+            "Description": "Application Load Balancer",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            }
+        }
+       
+		
+		
+		
+		
+		
+		
+		}
+		
+		
+		
+		
+		
+		
+	}
