@@ -1,0 +1,77 @@
+{
+
+    "AWSTemplateFormatVersion" : "2010-09-09",
+
+
+
+    "Description": "KG DevOps interview CF stack",
+
+
+
+    "Resources": {
+
+
+
+        "InterviewEC2Instance": {
+
+            "Type": "AWS::EC2::Instance",
+
+            "Properties": {
+
+                "InstanceType": "t2.nano",
+
+                "ImageId": "ami-047bb4163c506cd98",
+
+                "SourceDestCheck" : "false",
+
+                "Tags" :[{
+
+                    "Key" : "Name",
+
+                    "Value" : "Ifeanyi-Onyia"
+
+                }],
+
+
+
+                "UserData": {
+
+                    "Fn::Base64": "#!/bin/bash -xe\nyum update -y\n"
+
+                  }
+
+            }
+
+        }
+
+    },
+
+
+
+    "Outputs":{
+
+        "EC2InstanceID": {
+
+
+
+            "Description": "EC2 Instance ID ",
+
+            "Value" : { "Ref" : "InterviewEC2Instance" },
+
+            "Export":{
+
+                "Name": "InstanceID"
+
+            }
+
+
+
+        }
+
+        
+
+
+
+    }
+
+}
